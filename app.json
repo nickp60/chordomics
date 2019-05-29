@@ -1,0 +1,32 @@
+{
+  "name": "Chordomics test 2",
+  "description": "Precurser to launching chordomics.",
+  "keywords": [
+    "dataviz",
+    "shiny",
+    "R"
+  ],
+  "website": "https://github.com/nickp60/chordomics",
+  "repository": "https://github.com/nickp60/chordomics",
+  "scripts": {
+    "postdeploy": "Rscript init.R"
+  },
+  "env": {
+    "WEB_CONCURRENCY": {
+      "description": "The number of processes to run.",
+      "value": "1"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 2,
+      "size": "Performance-M"
+    }
+  },
+  "image": "heroku/ruby",
+  "buildpacks": [
+    {
+      "url": "https://github.com/virtualstaticvoid/heroku-buildpack-r.git#heroku-16"
+    }
+  ],
+}
