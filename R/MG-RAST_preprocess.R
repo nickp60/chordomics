@@ -1,4 +1,5 @@
 #' @importFrom magrittr "%>%"
+DEBUG<-FALSE
 processMGRAST <- function(ID, TMP_DIR, output,e = environment()){
   logging<-("")
 
@@ -15,7 +16,7 @@ processMGRAST <- function(ID, TMP_DIR, output,e = environment()){
   logging<-paste(logging,"Creating folder ",  THIS_TMP_DIR,"\n")
   shinyjs::html("progress",logging)
   # make a place to download our results, with a subdir for each new dataset
-  if(!exists(THIS_TMP_DIR)){
+  if(!dir.exists(THIS_TMP_DIR)){
     dir.create(THIS_TMP_DIR)
   }
 
@@ -138,7 +139,7 @@ processMGRAST <- function(ID, TMP_DIR, output,e = environment()){
     logging <- paste(logging,"\nmatching scientific name at the species level to taxid; this can take some time")
     shinyjs::html("progress",logging)
     for (i in 1:length(unique_org_names) ){
-      if (i %% 5 ==0){shinyjs::html("progress", paste0(logging, paste("\nmaching taxid to organism", i , "of", length(unique_org_names) )))}
+      if (i %% 5 == 0 & !DEBUG){shinyjs::html("progress", paste0(logging, paste("\nmaching taxid to organism", i , "of", length(unique_org_names) )))}
       query  <- unique_org_names[i]
       # This is not fantastic but we are going to just take the first 20 for later LCA analysis
       these_names <- tax$V1[grepl(query, tax$short, fixed=T)]
@@ -152,8 +153,9 @@ processMGRAST <- function(ID, TMP_DIR, output,e = environment()){
   } else if (taxlevel_for_matching == "genus"){
     simple_org_names <- unique(gsub("(.*?)\\s.*", "\\1", unique_org_names))
     for (i in 1:length(simple_org_names) ){
-      if (i %% 50 ==0){
-        shinyjs::html("progress", paste0(logging, paste("\nmaching taxid at genus level to organism", i , "of", length(simple_org_names) )),add = F)}
+      if (i %% 50 ==0 & !DEBUG){
+        shinyjs::html("progress", paste0(logging, paste("\nmaching taxid at genus level to organism", i , "of", length(simple_org_names) )),add = F)
+        }
 
       query <- simple_org_names[i]
       #names <- tax$V1[grepl(query, tax$all, fixed=T)]
@@ -170,9 +172,9 @@ processMGRAST <- function(ID, TMP_DIR, output,e = environment()){
   ont_names <- unique(ont$id)
   org_names <- unique(org$id)
   #  Most sequences with ontology have organism
-  table(ont_names %in% org_names)
+  #       table(ont_names %in% org_names)
   #  But only half sequences with organism have ontology
-  table(org_names %in% ont_names)
+  #       table(org_names %in% ont_names)
 
 
   # dplyr to the rescue
@@ -201,9 +203,21 @@ processMGRAST <- function(ID, TMP_DIR, output,e = environment()){
 
   # merge, but only keep the union of the dataset
   combined <- merge(min_org, min_ont, by="id", all = T)
-  #path to stats
-  stats_api <- paste0("https://api-ui.mg-rast.org/metagenome/", ID, "?verbosity=stats&detail=sequence_stats")
-  total_sequences <- as.numeric(gsub(".*sequence_count_raw\\:(\\d+).*", "\\1", gsub("\"","", readLines(stats_api, warn = F))))
+  lines_of_input <- readLines(input_dest_file)
+  # try to handle fastqs as well
+  seqnames <- lines_of_input[grepl("^[>|@]",lines_of_input, fixed = F)]
+  rm(lines_of_input)
+  gc()
+
+  get_n_seqs_from_api <- FALSE
+  if (get_n_seqs_from_api){
+    #path to stats,
+    stats_api <- paste0("https://api-ui.mg-rast.org/metagenome/", ID, "?verbosity=stats&detail=sequence_stats")
+    # we want the total number of sequences so that we can pad with the number of
+    total_sequences <- as.numeric(gsub(".*sequence_count_raw\\:(\\d+).*", "\\1", gsub("\"","", readLines(stats_api, warn = F))))
+  } else{
+    total_sequences <- length(seqnames)
+  }
   combined_all <- combined
   for(i in 1:(total_sequences-nrow(combined))){
     combined_all <- rbind(combined_all, data.frame(id=paste0("dummy",i),taxids_by_seq=NA,COGs_by_seq=NA))
@@ -216,10 +230,6 @@ processMGRAST <- function(ID, TMP_DIR, output,e = environment()){
   shinyjs::html("progress",logging)
 
   summary_text<- c("# Summary of MG-RAST merging")
-  lines_of_input <- readLines(input_dest_file)
-  seqnames <- lines_of_input[grepl(">",lines_of_input, fixed = T)]
-  rm(lines_of_input)
-  gc()
   summary_text <-c(summary_text, paste("sequences in input", length(seqnames), sep="\t"))
   summary_text <-c(summary_text, paste("ontology hits", n_ont, sep="\t"))
   summary_text <-c(summary_text, paste("unique ontology hits", length(unique(ont$annotations)), sep="\t"))
